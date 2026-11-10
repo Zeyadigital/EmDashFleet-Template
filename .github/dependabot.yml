@@ -1,0 +1,19 @@
+# Weekly version updates of every npm package and GitHub Action of the EmDash
+# Fleet site template (app plan, Security (Template supply chain); HR-119).
+# Pull requests target dev, where feature pull requests go (D31); security
+# updates always target the default branch, main. EmDash Fleet deletes this
+# file from every site repository it creates.
+# https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    target-branch: dev
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: dev
+    schedule:
+      interval: weekly

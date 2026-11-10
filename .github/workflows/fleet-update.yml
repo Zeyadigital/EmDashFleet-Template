@@ -1,0 +1,113 @@
+# Prepares an EmDash or plugin update of this site for EmDash Fleet (app plan,
+# Build and deploy, Workflow files in every site repository, and Health,
+# plugins and updates; tracker APA-171, OAU-088). It runs only when Fleet
+# dispatches it, installs the exact version Fleet names on the latest commit
+# of the branch Fleet dispatched, and keeps the changed files as an artifact
+# for one day: the entry `changes` holds `git status --porcelain=v1 -z
+# --untracked-files=all` and each changed file that still exists is stored as
+# `files/<path>`. Fleet checks the list and commits the files itself; this
+# workflow writes nothing to the repository, holds no secret and runs nothing
+# on the live site. The run uses this repository owner's GitHub Actions
+# minutes. Keep the trigger, the inputs, the run-name and the artifact name as
+# they are: Fleet relies on them (npm run check:workflows).
+# https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_dispatch
+# https://git-scm.com/docs/git-status#_porcelain_format_version_1
+name: fleet-update
+run-name: fleet-update ${{ inputs.job_id }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: The EmDash Fleet job this update belongs to
+        required: true
+        type: string
+      kind:
+        description: plugin or core
+        required: true
+        type: string
+      package:
+        description: The npm package to update; emdash for a core update
+        required: true
+        type: string
+      version:
+        description: The exact version to install
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ASTRO_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Check the inputs
+        env:
+          JOB_ID: ${{ inputs.job_id }}
+          KIND: ${{ inputs.kind }}
+          PACKAGE: ${{ inputs.package }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          # The regular expression semver.org suggests for a version.
+          semver='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*)(\.(0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9a-zA-Z-]*))*))?(\+[0-9a-zA-Z-]+(\.[0-9a-zA-Z-]+)*)?$'
+          name='^(@[a-z0-9][a-z0-9._-]*/)?[a-z0-9][a-z0-9._-]*$'
+          [[ "$JOB_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] || { echo "::error::job_id is not a job id"; exit 1; }
+          [[ "$KIND" == plugin || "$KIND" == core ]] || { echo "::error::kind is neither plugin nor core"; exit 1; }
+          [[ "$PACKAGE" =~ $name ]] || { echo "::error::package is not an npm package name"; exit 1; }
+          [[ "$VERSION" =~ $semver ]] || { echo "::error::version is not an exact version"; exit 1; }
+          [[ "$KIND" == plugin || "$PACKAGE" == emdash ]] || { echo "::error::a core update names the package emdash"; exit 1; }
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      # Node.js 26.13.0 bundles npm 11.20.0.
+      - run: npm install --global npm@12.2.2
+
+      - name: Install the update
+        env:
+          KIND: ${{ inputs.kind }}
+          PACKAGE: ${{ inputs.package }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          case "$KIND" in
+            plugin) npm install "$PACKAGE@$VERSION" --save-exact ;;
+            core) npm install "emdash@$VERSION" "@emdash-cms/cloudflare@$VERSION" --save-exact ;;
+          esac
+
+      # A rename lists the new path, then the original in the next NUL field,
+      # which is skipped. A listed path that no longer exists is not copied.
+      - name: Collect the changed files
+        run: |
+          out="$RUNNER_TEMP/fleet-update"
+          mkdir -p "$out/files"
+          git status --porcelain=v1 -z --untracked-files=all > "$out/changes"
+          original=false
+          while IFS= read -r -d '' entry; do
+            if [[ "$original" == true ]]; then original=false; continue; fi
+            status="${entry:0:2}"
+            path="${entry:3}"
+            [[ "$status" == *R* || "$status" == *C* ]] && original=true
+            if [[ -L "$path" ]]; then echo "::error::$path is a symbolic link"; exit 1; fi
+            if [[ -f "$path" ]]; then
+              mkdir -p "$out/files/$(dirname -- "$path")"
+              cp -- "$path" "$out/files/$path"
+            fi
+          done < "$out/changes"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fleet-update-${{ inputs.job_id }}
+          path: ${{ runner.temp }}/fleet-update/
+          retention-days: 1
+          if-no-files-found: error
+          include-hidden-files: true

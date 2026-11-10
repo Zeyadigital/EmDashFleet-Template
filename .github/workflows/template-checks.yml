@@ -1,0 +1,59 @@
+# The checks of every pull request into dev of the EmDash Fleet site template
+# (app plan, Sites (template); HR-118, HR-119; tracker APA-172, APA-173,
+# APA-174, APA-175, OAU-089). They run again when the description is edited,
+# so the checklist rule of scripts/check-pull-request.mjs sees a ticked line. The token only reads the repository and no secret is
+# used. A site repository created from the template also receives this file,
+# but it never runs there: such a repository has no dev branch, and the job's
+# condition names the template repository. Delete it from a site repository
+# if you like; EmDash Fleet does not use it.
+# https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request
+name: template-checks
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+    branches: [dev]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: template-checks-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    if: github.repository == 'Zeyadigital/EmDashFleet-Template'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ASTRO_TELEMETRY_DISABLED: "1"
+      WRANGLER_SEND_METRICS: "false"
+    steps:
+      # Two commits: the merge commit of the pull request and its first
+      # parent, the base branch.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # Node.js 26.13.0 bundles npm 11.20.0.
+      - run: npm install --global npm@12.2.2
+      - run: npm ci
+      - name: Check the pull request checklist
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: node scripts/check-pull-request.mjs
+      - run: npm run types:check
+      - run: node scripts/audit-signatures.mjs
+      - run: npm test
+      - run: npm run build
+      - run: npx wrangler versions upload --dry-run --outfile fleet-bundle/upload-form
+      - run: npm run check:bindings
+      - run: npm run check:workflows
+      - run: npm run check:migrations
