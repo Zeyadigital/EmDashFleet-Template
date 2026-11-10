@@ -6,7 +6,8 @@
 // it. template-checks.yml runs it with the description in PR_BODY on the
 // merge commit of the pull request, whose first parent is the base branch, and
 // runs it again when the description is edited. wrangler.jsonc is read with
-// Wrangler's own reader.
+// Wrangler's own reader. A base without wrangler.jsonc has no date to change, so
+// the pull request that adds the file passes whatever its description says.
 //
 // Usage: PR_BODY=<description> node scripts/check-pull-request.mjs [base revision, default HEAD^1]
 // https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/creating-a-pull-request-template-for-your-repository
@@ -44,13 +45,17 @@ function compatibilityDate(path) {
 
 if (import.meta.main) {
 	const base = process.argv[2] ?? "HEAD^1";
-	const dir = mkdtempSync(join(tmpdir(), "fleet-check-pull-request-"));
-	try {
-		const basePath = join(dir, "wrangler.jsonc");
-		writeFileSync(basePath, execFileSync("git", ["show", `${base}:wrangler.jsonc`], { encoding: "utf8" }));
-		const findings = checklistFindings({ baseDate: compatibilityDate(basePath), headDate: compatibilityDate(resolve("wrangler.jsonc")), body: process.env.PR_BODY ?? "" });
-		report("check-pull-request", findings);
-	} finally {
-		rmSync(dir, { recursive: true, force: true });
+	const inBase = execFileSync("git", ["ls-tree", "--name-only", base, "--", "wrangler.jsonc"], { encoding: "utf8" }).trim() !== "";
+	if (!inBase) report("check-pull-request", []);
+	else {
+		const dir = mkdtempSync(join(tmpdir(), "fleet-check-pull-request-"));
+		try {
+			const basePath = join(dir, "wrangler.jsonc");
+			writeFileSync(basePath, execFileSync("git", ["show", `${base}:wrangler.jsonc`], { encoding: "utf8" }));
+			const findings = checklistFindings({ baseDate: compatibilityDate(basePath), headDate: compatibilityDate(resolve("wrangler.jsonc")), body: process.env.PR_BODY ?? "" });
+			report("check-pull-request", findings);
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
 	}
 }
