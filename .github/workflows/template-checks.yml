@@ -1,8 +1,9 @@
 # The checks of every pull request into dev of the EmDash Fleet site template
 # (app plan, Sites (template); HR-118, HR-119; tracker APA-172, APA-173,
 # APA-174, APA-175, OAU-089). They run again when the description is edited,
-# so the checklist rule of scripts/check-pull-request.mjs sees a ticked line. The token only reads the repository and no secret is
-# used. A site repository created from the template also receives this file,
+# so the checklist rule of scripts/check-pull-request.mjs sees a ticked line.
+# The token only reads the repository and no secret is used. A site
+# repository created from the template also receives this file,
 # but it never runs there: such a repository has no dev branch, and the job's
 # condition names the template repository. Delete it from a site repository
 # if you like; EmDash Fleet does not use it.
