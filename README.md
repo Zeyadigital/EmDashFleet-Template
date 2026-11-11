@@ -56,7 +56,7 @@ npm run dev
 These files serve the template's own maintenance, and you can delete them:
 
 - `.github/workflows/template-checks.yml` never runs in a site repository: it runs only on pull requests into a `dev` branch of the template repository itself.
-- `.github/dependabot.yml`, `.github/CODEOWNERS` and `.github/pull_request_template.md`, which Fleet deletes from every repository it creates.
+- `.github/dependabot.yml`, `.github/CODEOWNERS` and `.github/pull_request_template.md` serve only the template repository: they turn on Dependabot version updates, ask the template's maintainers for reviews and add the template's pull request checklist. Fleet never deletes a file from your repository, so they stay until you delete them.
 - `fleet-site-bindings.json` and the other files in `scripts/` that the template checks use.
 
 ## Maintaining the template
