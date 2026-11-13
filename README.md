@@ -57,15 +57,19 @@ These files serve the template's own maintenance, and you can delete them:
 
 - `.github/workflows/template-checks.yml` never runs in a site repository: it runs only on pull requests into a `dev` branch of the template repository itself.
 - `.github/dependabot.yml`, `.github/CODEOWNERS` and `.github/pull_request_template.md` serve only the template repository: they turn on Dependabot version updates, ask the template's maintainers for reviews and add the template's pull request checklist. Fleet never deletes a file from your repository, so they stay until you delete them.
-- `fleet-site-bindings.json` and the other files in `scripts/` that the template checks use.
+- `.githooks/pre-commit` and `.gitleaks.toml` serve the template's secret scanning; the hook stays off in your repository until you run `git config core.hooksPath .githooks`.
+- `fleet-site-bindings.json` and the other files in `scripts/` that the template checks use, among them `scripts/check-pins.mjs` and `scripts/check-workflows.mjs`.
 
 ## Maintaining the template
 
 This section applies to `Zeyadigital/EmDashFleet-Template` only.
 
-- `dev` is the integration branch. Feature pull requests are squash-merged into it after the other co-founder approves them, and `template-checks.yml` runs on each: `npm ci`, the pull request checklist, `npm run types:check`, the registry signatures, `npm test`, the build, the dry-run bundle, `npm run check:bindings`, `npm run check:workflows` and `npm run check:migrations`.
+- `dev` is the integration branch. Feature pull requests are squash-merged into it after the other co-founder approves them, and `template-checks.yml` runs on each: `npm ci`, the pull request checklist, `npm run types:check`, the registry signatures, `npm test`, the build, the dry-run bundle, `npm run check:bindings`, `npm run check:workflows`, `npm run check:pins` and `npm run check:migrations`, after a gitleaks scan of the pull request's commits.
 - `main` is the branch Fleet creates repositories from. Changes reach it only through a release pull request from `dev`, merged with a merge commit.
-- Every commit is signed. `compatibility_date` in `wrangler.jsonc` is raised to the current date only once the nightly contract tests pass on it, and a pull request that changes it fails until its checklist says so.
+- Every commit is signed: set `gpg.format ssh`, `user.signingkey <path to your public key>` and `commit.gpgsign true` (or sign with a GPG key), and add the key to GitHub as a signing key. The branch rules (signed commits, linear history on `dev`, merge commits on `main`, one approval from the other co-founder) are set by the owner in GitHub, not by this repository.
+- Secret scanning: install gitleaks 8.30.1 and run `git config core.hooksPath .githooks` once per clone; the hook scans the staged changes. `template-checks.yml` runs the same version, checked against the SHA-256 of its release archive, over the commits of every pull request.
+- Dependencies: every version in `package.json`, `.nvmrc` and `engines` is exact (`npm run check:pins`), and an action is pinned to a commit SHA. Dependabot opens the weekly pull requests into `dev` for npm and GitHub Actions.
+- `compatibility_date` in `wrangler.jsonc` is raised to the current date only once the nightly contract tests pass on it, and a pull request that changes it fails until its checklist says so.
 - `worker-configuration.d.ts` is generated: run `npm run types` after any change to `wrangler.jsonc`; the template checks fail when it is out of date.
 - `fleet-site-bindings.json` is the output of `npm run export:site-bindings` in `Zeyadigital/EmDashFleet-App`; copy it again whenever the App's site bindings change.
 - `src/`, `seed/`, `tsconfig.json` and `emdash-env.d.ts` come unchanged from EmDash's `blog-cloudflare` template; `THIRD_PARTY_NOTICES.md` records the source and its licence.

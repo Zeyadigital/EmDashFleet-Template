@@ -15,6 +15,7 @@
 		"types:check": "wrangler types --check",
 		"check:bindings": "node scripts/check-bindings.mjs",
 		"check:workflows": "node scripts/check-workflows.mjs",
+		"check:pins": "node scripts/check-pins.mjs",
 		"check:migrations": "node scripts/check-migrations.mjs",
 		"test": "node --test \"scripts/*.test.mjs\""
 	},
