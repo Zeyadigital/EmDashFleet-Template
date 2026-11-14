@@ -8,8 +8,11 @@
 # `files/<path>`. Fleet checks the list and commits the files itself; this
 # workflow writes nothing to the repository, holds no secret and runs nothing
 # on the live site. The run uses this repository owner's GitHub Actions
-# minutes. Keep the trigger, the inputs, the run-name and the artifact name as
-# they are: Fleet relies on them (npm run check:workflows).
+# minutes. Keep the trigger, the inputs, the run-name, the concurrency group,
+# the checkout and the artifact name as they are: Fleet relies on them (npm run
+# check:workflows). Fleet binds each update to the run it dispatched (a
+# workflow_dispatch of this file on the dispatched branch) and accepts from its
+# artifact only changes to package.json and package-lock.json.
 # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_dispatch
 # https://git-scm.com/docs/git-status#_porcelain_format_version_1
 name: fleet-update
@@ -37,6 +40,10 @@ on:
 
 permissions:
   contents: read
+
+# One update at a time in this repository and never a cancelled run: a second
+# dispatch waits for the first.
+concurrency: fleet-update
 
 jobs:
   update:
@@ -86,6 +93,10 @@ jobs:
 
       # A rename lists the new path, then the original in the next NUL field,
       # which is skipped. A listed path that no longer exists is not copied.
+      # npm install changes package.json and package-lock.json and nothing else
+      # that git tracks (node_modules/ is ignored): any other path means an
+      # install script wrote into the repository, and the run fails before
+      # anything is stored. Fleet checks the list again before it commits.
       - name: Collect the changed files
         run: |
           out="$RUNNER_TEMP/fleet-update"
@@ -97,6 +108,7 @@ jobs:
             status="${entry:0:2}"
             path="${entry:3}"
             [[ "$status" == *R* || "$status" == *C* ]] && original=true
+            case "$path" in package.json|package-lock.json) ;; *) echo "::error::$path changed; an update changes package.json and package-lock.json only"; exit 1 ;; esac
             if [[ -L "$path" ]]; then echo "::error::$path is a symbolic link"; exit 1; fi
             if [[ -f "$path" ]]; then
               mkdir -p "$out/files/$(dirname -- "$path")"

@@ -5,9 +5,12 @@
 # without uploading it (`wrangler versions upload --dry-run`) and keeps the
 # bundle and the static output as an artifact for one day, which Fleet
 # downloads and uploads to Cloudflare itself. The run uses this repository
-# owner's GitHub Actions minutes. Keep the trigger, the inputs, the run-name
-# and the artifact name as they are: Fleet relies on them
-# (npm run check:workflows).
+# owner's GitHub Actions minutes. Keep the trigger, the inputs, the run-name,
+# the concurrency group, the checkout and the artifact name as they are: Fleet
+# relies on them (npm run check:workflows). Fleet binds each build to the run
+# it dispatched (a workflow_dispatch of this file on the dispatched branch,
+# whose head is the commit it named) and downloads the artifact of that run
+# only; a run started by anyone else is ignored.
 # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_dispatch
 # https://developers.cloudflare.com/workers/wrangler/commands/workers/#versions-upload
 name: fleet-build
@@ -45,6 +48,10 @@ jobs:
         run: |
           [[ "$JOB_ID" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]] || { echo "::error::job_id is not a job id"; exit 1; }
           [[ "$COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::commit_sha is not a full commit SHA"; exit 1; }
+          # GITHUB_SHA is the head of the branch the dispatch named. Fleet names
+          # that head and refuses a run whose head_sha differs, so a dispatch
+          # of another commit stops here instead of building it.
+          [[ "$COMMIT_SHA" == "$GITHUB_SHA" ]] || { echo "::error::commit_sha is not the head of the dispatched branch"; exit 1; }
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

@@ -15,7 +15,7 @@ The two workflows in `.github/workflows/` run only when someone starts a deploym
 
 Both workflows only read the repository and hold no secret and no Cloudflare credential. Fleet builds this site with GitHub Actions in the repository, within the repository owner's GitHub Actions allowance (USD 12 of usage a month included on GitHub Free) and 500 MB of artifact storage; usage beyond that is charged by GitHub to the repository owner ([GitHub Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions), [included usage](https://docs.github.com/en/billing/reference/product-usage-included)).
 
-Keep both workflow files, their names, triggers and inputs, and `scripts/audit-signatures.mjs` with `scripts/lib/report.mjs`, as they are. A changed workflow file still deploys, and Fleet shows a warning on the site.
+Keep both workflow files, their names, triggers, inputs, concurrency groups, checkouts and artifact names, and `scripts/audit-signatures.mjs` with `scripts/lib/report.mjs`, as they are. A changed workflow file still deploys, and Fleet shows a warning on the site. Fleet binds every build and update to the run it dispatched: the run must be a `workflow_dispatch` of the workflow file on the branch Fleet dispatched, with the head commit Fleet named, and Fleet downloads the artifact of that run only, never one found by name across runs. A run that someone else starts with the same job id is ignored, and an update artifact that changes anything but `package.json` and `package-lock.json` is refused by the workflow and again by Fleet.
 
 ## Creating the repository yourself
 

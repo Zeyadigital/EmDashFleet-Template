@@ -31,10 +31,25 @@ const FORBIDDEN_TRIGGERS = new Set(["pull_request_target", "workflow_run", "issu
 const TEMPLATE_CONDITION = "github.repository == 'Zeyadigital/EmDashFleet-Template'";
 const GITLEAKS_STEP = "gitleaks";
 
-/** The required string inputs and the run-name of each build workflow, which Fleet dispatches and finds its runs by. */
+/**
+ * What Fleet relies on in each build workflow it dispatches: the required string inputs, the run-name it finds its runs
+ * by, the concurrency group (a fixed name, so no run cancels another), the checkout ref and the artifact name.
+ */
 const BUILD_WORKFLOWS = {
-	"fleet-build.yml": { runName: "fleet-build ${{ inputs.job_id }}", inputs: ["commit_sha", "job_id"] },
-	"fleet-update.yml": { runName: "fleet-update ${{ inputs.job_id }}", inputs: ["job_id", "kind", "package", "version"] },
+	"fleet-build.yml": {
+		runName: "fleet-build ${{ inputs.job_id }}",
+		inputs: ["commit_sha", "job_id"],
+		concurrency: "fleet-build",
+		checkoutRef: "${{ inputs.commit_sha }}",
+		artifact: "fleet-bundle-${{ inputs.job_id }}",
+	},
+	"fleet-update.yml": {
+		runName: "fleet-update ${{ inputs.job_id }}",
+		inputs: ["job_id", "kind", "package", "version"],
+		concurrency: "fleet-update",
+		checkoutRef: "${{ github.sha }}",
+		artifact: "fleet-update-${{ inputs.job_id }}",
+	},
 };
 
 /** @typedef {import("./lib/report.mjs").Finding} Finding */
@@ -171,6 +186,18 @@ export function guardBuildWorkflow(name, text, workflow) {
 		if (isObject(definition) && (definition.required !== true || definition.type !== "string")) {
 			fail("guard-inputs", `input ${input} must be required: true and type: string`);
 		}
+	}
+
+	if (workflow.concurrency !== spec.concurrency) fail("guard-concurrency", `concurrency must be exactly ${spec.concurrency}, with no cancel-in-progress`);
+	const steps = Object.values(isObject(workflow.jobs) ? workflow.jobs : {}).flatMap((body) => (isObject(body) && Array.isArray(body.steps) ? body.steps : []));
+	const uses = (prefix) => steps.filter((step) => isObject(step) && typeof step.uses === "string" && step.uses.startsWith(prefix));
+	const [checkout, ...otherCheckouts] = uses("actions/checkout@");
+	if (otherCheckouts.length > 0 || !isObject(checkout) || !isObject(checkout.with) || checkout.with.ref !== spec.checkoutRef || checkout.with["persist-credentials"] !== false) {
+		fail("guard-checkout", `one actions/checkout step with ref: ${spec.checkoutRef} and persist-credentials: false`);
+	}
+	const [upload, ...otherUploads] = uses("actions/upload-artifact@");
+	if (otherUploads.length > 0 || !isObject(upload) || !isObject(upload.with) || upload.with.name !== spec.artifact || upload.with["retention-days"] !== 1) {
+		fail("guard-artifact", `one actions/upload-artifact step with name: ${spec.artifact} and retention-days: 1`);
 	}
 	return findings;
 }

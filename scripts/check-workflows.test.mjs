@@ -27,6 +27,15 @@ test("fails a push trigger, a missing input and an unconditioned template job", 
 	assert.deepEqual(rulesAfter("template-checks.yml", (text) => text.replace(/ {4}if: .*\n/, "")), ["guard-template-only"]);
 });
 
+test("fails a changed concurrency group, checkout or artifact of a build workflow", () => {
+	assert.deepEqual(rulesAfter("fleet-build.yml", (text) => text.replace("concurrency: fleet-build\n", "")), ["guard-concurrency"]);
+	assert.deepEqual(rulesAfter("fleet-update.yml", (text) => text.replace("concurrency: fleet-update\n", "concurrency:\n  group: fleet-update\n  cancel-in-progress: true\n")), ["guard-concurrency"]);
+	assert.deepEqual(rulesAfter("fleet-build.yml", (text) => text.replace("ref: ${{ inputs.commit_sha }}", "ref: ${{ github.sha }}")), ["guard-checkout"]);
+	assert.deepEqual(rulesAfter("fleet-update.yml", (text) => text.replace("persist-credentials: false", "persist-credentials: true")), ["guard-checkout"]);
+	assert.deepEqual(rulesAfter("fleet-build.yml", (text) => text.replace("name: fleet-bundle-${{ inputs.job_id }}", "name: fleet-bundle")), ["guard-artifact"]);
+	assert.deepEqual(rulesAfter("fleet-update.yml", (text) => text.replace("retention-days: 1", "retention-days: 7")), ["guard-artifact"]);
+});
+
 const SHA = "3d3c42e5aac5ba805825da76410c181273ba90b1";
 const workflow = (body) => `on: workflow_dispatch\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n${body}`;
 const rulesOf = (text) => lintWorkflow("w.yml", text).findings.map((finding) => finding.rule);
