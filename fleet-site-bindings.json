@@ -1,0 +1,47 @@
+{
+	"$comment": "Written by npm run export:site-bindings from Fleet's SiteBindings constants. Change the constants, never this file.",
+	"bindings": [
+		{
+			"name": "DB",
+			"type": "d1",
+			"wrangler": "d1_databases",
+			"declaredIn": "wrangler.jsonc"
+		},
+		{
+			"name": "MEDIA",
+			"type": "r2_bucket",
+			"wrangler": "r2_buckets",
+			"declaredIn": "wrangler.jsonc"
+		},
+		{
+			"name": "SESSION",
+			"type": "kv_namespace",
+			"wrangler": "kv_namespaces",
+			"declaredIn": "wrangler.jsonc"
+		},
+		{
+			"name": "IMAGES",
+			"type": "images",
+			"wrangler": "images",
+			"declaredIn": "wrangler.jsonc"
+		},
+		{
+			"name": "ASSETS",
+			"type": "assets",
+			"wrangler": "assets",
+			"declaredIn": "adapter"
+		},
+		{
+			"name": "EMDASH_SITE_URL",
+			"type": "plain_text",
+			"wrangler": null,
+			"declaredIn": "upload"
+		},
+		{
+			"name": "EMDASH_ENCRYPTION_KEY",
+			"type": "secret_text",
+			"wrangler": null,
+			"declaredIn": "upload"
+		}
+	]
+}
