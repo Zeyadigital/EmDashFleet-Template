@@ -15,7 +15,7 @@
 // string inputs, and every job of template-checks.yml must carry the
 // repository condition of HR-119, so it never runs in a site repository, and
 // must run gitleaks (APB-001): a release archive of a pinned version, checked
-// against its SHA-256, over the commits of the pull request.
+// against its SHA-256, over the commits of the push or pull request.
 //
 // Usage: node scripts/check-workflows.mjs
 // https://docs.github.com/en/actions/reference/security/secure-use
@@ -177,7 +177,7 @@ export function guardBuildWorkflow(name, text, workflow) {
 
 /**
  * The findings of the guard on template-checks.yml: every job carries the template's repository condition, and the
- * job that checks pull requests scans their commits with gitleaks from a release archive whose SHA-256 is checked.
+ * job that checks pushes and pull requests scans their commits with gitleaks from a release archive whose SHA-256 is checked.
  * @param {unknown} workflow
  * @returns {Finding[]}
  */
@@ -202,7 +202,7 @@ export function guardTemplateChecks(workflow) {
 	if (!/^\d+\.\d+\.\d+$/.test(String(env.GITLEAKS_VERSION ?? ""))) fail("GITLEAKS_VERSION must be one exact release version");
 	if (!/^[0-9a-f]{64}$/.test(String(env.GITLEAKS_SHA256 ?? ""))) fail("GITLEAKS_SHA256 must be the SHA-256 of the release archive");
 	if (!run.includes("sha256sum --check --strict")) fail("the archive must be checked against its SHA-256 before it is unpacked");
-	if (!run.includes("git rev-list --quiet") || !run.includes("--log-opts=")) fail("gitleaks must scan the commit range of the pull request, after git rev-list proves that the range resolves");
+	if (!run.includes("git rev-list --quiet") || !run.includes("--log-opts=")) fail("gitleaks must scan the commit range of the push or pull request, after git rev-list proves that the range resolves");
 	const checkout = steps.find((step) => isObject(step) && typeof step.uses === "string" && step.uses.startsWith("actions/checkout@"));
 	if (!isObject(checkout) || !isObject(checkout.with) || checkout.with["fetch-depth"] !== 0) fail("actions/checkout must fetch the full history (fetch-depth: 0) for the commit range");
 	return findings;

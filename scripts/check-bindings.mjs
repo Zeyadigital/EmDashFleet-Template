@@ -7,7 +7,7 @@
 // different bindings. Every binding the file declares in wrangler.jsonc must
 // be there under its Wrangler key, no other binding may be, and wrangler.jsonc
 // holds no key beyond those and the Worker settings of WORKER_SETTINGS, so a
-// renamed, missing or added binding of any type fails the pull request.
+// renamed, missing or added binding of any type fails the template checks.
 // wrangler.jsonc is read with Wrangler's own reader.
 //
 // Usage: node scripts/check-bindings.mjs [wrangler.jsonc] [fleet-site-bindings.json]

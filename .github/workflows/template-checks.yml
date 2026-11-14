@@ -1,27 +1,34 @@
-# The checks of every pull request into dev of the EmDash Fleet site template
-# (app plan, Sites (template); HR-118, HR-119; tracker APA-172, APA-173,
-# APA-174, APA-175, OAU-089, APB-001, APC-004). They run again when the
-# description is edited, so the checklist rule of scripts/check-pull-request.mjs
-# sees a ticked line.
+# The checks of every push to dev or main of the EmDash Fleet site template and
+# of Dependabot's pull requests into dev (github_oauth_plan.md D22 (HR-162);
+# app plan, Sites (template); HR-118, HR-119; tracker APA-172, APA-173,
+# APA-174, APA-175, OAU-089, APB-001, APC-004). A co-founder pushes alone: no
+# pull request, review, approver or signed commit is required. The checklist
+# rule of scripts/check-pull-request.mjs reads the messages of the commits.
 # The token only reads the repository and no secret is used. A site
-# repository created from the template also receives this file,
-# but it never runs there: such a repository has no dev branch, and the job's
-# condition names the template repository. Delete it from a site repository
-# if you like; EmDash Fleet does not use it.
+# repository created from the template also receives this file and its
+# pushes start a run, but the job's condition names the template repository,
+# so the job is skipped there. Delete the file from a site repository if you
+# like; EmDash Fleet does not use it.
+# https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#push
 # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request
 name: template-checks
 
 on:
+  push:
+    branches: [dev, main]
   pull_request:
-    types: [opened, edited, synchronize, reopened]
+    types: [opened, synchronize, reopened]
     branches: [dev]
 
 permissions:
   contents: read
 
+# One run per push and per pull request. Only a pull request run is cancelled
+# by a newer one: cancelling the run of an earlier push would leave its
+# commits unscanned.
 concurrency:
-  group: template-checks-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: template-checks-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   checks:
@@ -32,9 +39,9 @@ jobs:
       ASTRO_TELEMETRY_DISABLED: "1"
       WRANGLER_SEND_METRICS: "false"
     steps:
-      # The full history, for the gitleaks range; the checklist rule reads
-      # the merge commit of the pull request and its first parent, the base
-      # branch.
+      # The full history, for the gitleaks range; the checklist rule reads the
+      # commits of the push since the previous push, or the merge commit of the
+      # pull request and its first parent, the base branch.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
@@ -46,8 +53,8 @@ jobs:
         env:
           GITLEAKS_VERSION: 8.30.1
           GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           archive="$RUNNER_TEMP/gitleaks.tar.gz"
           curl -fsSL -o "$archive" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
@@ -66,10 +73,10 @@ jobs:
       # Node.js 26.13.0 bundles npm 11.20.0.
       - run: npm install --global npm@12.2.2
       - run: npm ci
-      - name: Check the pull request checklist
+      - name: Check the contract tests checklist
         env:
-          PR_BODY: ${{ github.event.pull_request.body }}
-        run: node scripts/check-pull-request.mjs
+          CHECK_BASE: ${{ github.event_name == 'push' && github.event.before || 'HEAD^1' }}
+        run: node scripts/check-pull-request.mjs "$CHECK_BASE"
       - run: npm run types:check
       - run: node scripts/audit-signatures.mjs
       - run: npm test

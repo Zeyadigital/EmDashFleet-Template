@@ -82,7 +82,7 @@ test("lints a composite action under .github/actions like a workflow", () => {
 	assert.deepEqual(workflowFindings(files, new Map([[path, action("    - run: echo ok\n      shell: bash\n")]])), []);
 });
 
-test("fails template-checks.yml without a pinned, verified gitleaks scan of the pull request's commits", () => {
+test("fails template-checks.yml without a pinned, verified gitleaks scan of the commits of a push or pull request", () => {
 	assert.deepEqual(rulesAfter("template-checks.yml", (text) => text.replace("name: gitleaks", "name: scan")), ["guard-gitleaks"]);
 	assert.deepEqual(rulesAfter("template-checks.yml", (text) => text.replace("GITLEAKS_VERSION: 8.30.1", "GITLEAKS_VERSION: latest")), ["guard-gitleaks"]);
 	assert.deepEqual(rulesAfter("template-checks.yml", (text) => text.replace(/GITLEAKS_SHA256: [0-9a-f]+/, "GITLEAKS_SHA256: abc")), ["guard-gitleaks"]);

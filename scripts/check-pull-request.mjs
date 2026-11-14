@@ -1,16 +1,17 @@
-// The checklist rule of the template's pull requests (tracker APA-175; app
-// plan, Sites (template)): a pull request that changes compatibility_date in
-// wrangler.jsonc fails until its description ticks the line of
-// .github/pull_request_template.md stating that the nightly contract tests
-// passed, because the template raises that date only once those tests pass on
-// it. template-checks.yml runs it with the description in PR_BODY on the
-// merge commit of the pull request, whose first parent is the base branch, and
-// runs it again when the description is edited. wrangler.jsonc is read with
-// Wrangler's own reader. A base without wrangler.jsonc has no date to change, so
-// the pull request that adds the file passes whatever its description says.
+// The checklist rule of the template's changes (tracker APA-175; github_oauth_plan.md
+// D22 (HR-162); app plan, Sites (template)): a change that raises compatibility_date
+// in wrangler.jsonc fails until a line stating that the nightly contract tests passed is
+// ticked (`- [x] The nightly contract tests passed on this change`) in the message of one
+// of the commits between the base revision and HEAD, because the template raises that
+// date only once those tests pass on it. There is no pull request template and no pull
+// request description to read: a co-founder pushes alone (HR-162) and the line goes in
+// the message of a commit of the push. template-checks.yml runs it on a push with the
+// revision before the push as the base, and on the merge commit of a Dependabot pull
+// request, whose first parent is the base branch. wrangler.jsonc is read with Wrangler's
+// own reader. A base without wrangler.jsonc has no date to change, so the change that
+// adds the file passes whatever its messages say.
 //
-// Usage: PR_BODY=<description> node scripts/check-pull-request.mjs [base revision, default HEAD^1]
-// https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/creating-a-pull-request-template-for-your-repository
+// Usage: node scripts/check-pull-request.mjs [base revision, default HEAD^1]
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -21,15 +22,15 @@ import { report } from "./lib/report.mjs";
 export const CONTRACT_LINE = "The nightly contract tests passed on this change";
 
 /**
- * The findings of one pull request.
- * @param {{ baseDate: unknown, headDate: unknown, body: string }} change the compatibility_date on both sides and the description
+ * The findings of one change.
+ * @param {{ baseDate: unknown, headDate: unknown, messages: string }} change the compatibility_date on both sides and the commit messages that describe it
  * @returns {import("./lib/report.mjs").Finding[]}
  */
-export function checklistFindings({ baseDate, headDate, body }) {
+export function checklistFindings({ baseDate, headDate, messages }) {
 	if (baseDate === headDate) return [];
-	const ticked = body.split(/\r?\n/).some((line) => /^[-*] \[[xX]\] (.*)$/.exec(line.trim())?.[1]?.trim() === CONTRACT_LINE);
+	const ticked = messages.split(/\r?\n/).some((line) => /^[-*] \[[xX]\] (.*)$/.exec(line.trim())?.[1]?.trim() === CONTRACT_LINE);
 	if (ticked) return [];
-	return [{ file: "wrangler.jsonc", rule: "contract-tests", message: `compatibility_date changes from ${String(baseDate)} to ${String(headDate)}; tick "${CONTRACT_LINE}" in the description once they have` }];
+	return [{ file: "wrangler.jsonc", rule: "contract-tests", message: `compatibility_date changes from ${String(baseDate)} to ${String(headDate)}; tick "${CONTRACT_LINE}" in a commit message once they have` }];
 }
 
 /**
@@ -52,7 +53,8 @@ if (import.meta.main) {
 		try {
 			const basePath = join(dir, "wrangler.jsonc");
 			writeFileSync(basePath, execFileSync("git", ["show", `${base}:wrangler.jsonc`], { encoding: "utf8" }));
-			const findings = checklistFindings({ baseDate: compatibilityDate(basePath), headDate: compatibilityDate(resolve("wrangler.jsonc")), body: process.env.PR_BODY ?? "" });
+			const messages = execFileSync("git", ["log", "--format=%B", `${base}..HEAD`], { encoding: "utf8" });
+			const findings = checklistFindings({ baseDate: compatibilityDate(basePath), headDate: compatibilityDate(resolve("wrangler.jsonc")), messages });
 			report("check-pull-request", findings);
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
