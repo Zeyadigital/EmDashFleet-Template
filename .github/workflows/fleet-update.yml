@@ -80,6 +80,16 @@ jobs:
       # Node.js 26.13.0 bundles npm 11.20.0.
       - run: npm install --global npm@12.2.2
 
+      # A core update moves emdash and @emdash-cms/cloudflare together, and
+      # @emdash-cms/cloudflare names emdash as an exact peer, so npm cannot
+      # install either package while package-lock.json still holds the other
+      # at the earlier version (ERESOLVE). The core branch sets both exact
+      # versions in package.json, removes from package-lock.json the entries
+      # of the EmDash packages (emdash, every @emdash-cms/ package and
+      # @cloudflare/kumo, the design system @emdash-cms/admin pins), keeping
+      # the file's indentation, and runs npm install, which resolves those
+      # packages again and keeps every other locked version.
+      # https://docs.npmjs.com/cli/v11/configuring-npm/package-lock-json
       - name: Install the update
         env:
           KIND: ${{ inputs.kind }}
@@ -88,7 +98,27 @@ jobs:
         run: |
           case "$KIND" in
             plugin) npm install "$PACKAGE@$VERSION" --save-exact ;;
-            core) npm install "emdash@$VERSION" "@emdash-cms/cloudflare@$VERSION" --save-exact ;;
+            core)
+              node --input-type=module -e '
+                import { readFileSync, writeFileSync } from "node:fs";
+                const version = process.env.VERSION;
+                const indentOf = (text) => /^[ \t]+/m.exec(text)?.[0] ?? "\t";
+                const pkgText = readFileSync("package.json", "utf8");
+                const pkg = JSON.parse(pkgText);
+                for (const name of ["emdash", "@emdash-cms/cloudflare"]) {
+                  const group = ["dependencies", "devDependencies"].find((key) => pkg[key]?.[name] !== undefined);
+                  if (group === undefined) { console.error(`::error::package.json does not depend on ${name}`); process.exit(1); }
+                  pkg[group][name] = version;
+                }
+                writeFileSync("package.json", JSON.stringify(pkg, null, indentOf(pkgText)) + "\n");
+                const lockText = readFileSync("package-lock.json", "utf8");
+                const lock = JSON.parse(lockText);
+                const emdash = /(^|\/)node_modules\/(emdash|@emdash-cms\/[^/]+|@cloudflare\/kumo)$/;
+                for (const path of Object.keys(lock.packages ?? {})) if (emdash.test(path)) delete lock.packages[path];
+                writeFileSync("package-lock.json", JSON.stringify(lock, null, indentOf(lockText)) + "\n");
+              '
+              npm install
+              ;;
           esac
 
       # A rename lists the new path, then the original in the next NUL field,
