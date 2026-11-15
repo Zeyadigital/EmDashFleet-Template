@@ -86,9 +86,11 @@ jobs:
       # at the earlier version (ERESOLVE). The core branch sets both exact
       # versions in package.json, removes from package-lock.json the entries
       # of the EmDash packages (emdash, every @emdash-cms/ package and
-      # @cloudflare/kumo, the design system @emdash-cms/admin pins), keeping
-      # the file's indentation, and runs npm install, which resolves those
-      # packages again and keeps every other locked version.
+      # @cloudflare/kumo, the design system @emdash-cms/admin pins) with every
+      # package nested under them, keeping the file's indentation, and runs
+      # npm install, which resolves those packages again and keeps every other
+      # locked version. Leaving the nested entries made npm install drop them
+      # when the version did not change, and npm ci then refused the lockfile.
       # https://docs.npmjs.com/cli/v11/configuring-npm/package-lock-json
       - name: Install the update
         env:
@@ -113,7 +115,7 @@ jobs:
                 writeFileSync("package.json", JSON.stringify(pkg, null, indentOf(pkgText)) + "\n");
                 const lockText = readFileSync("package-lock.json", "utf8");
                 const lock = JSON.parse(lockText);
-                const emdash = /(^|\/)node_modules\/(emdash|@emdash-cms\/[^/]+|@cloudflare\/kumo)$/;
+                const emdash = /(^|\/)node_modules\/(emdash|@emdash-cms\/[^/]+|@cloudflare\/kumo)(\/|$)/;
                 for (const path of Object.keys(lock.packages ?? {})) if (emdash.test(path)) delete lock.packages[path];
                 writeFileSync("package-lock.json", JSON.stringify(lock, null, indentOf(lockText)) + "\n");
               '
