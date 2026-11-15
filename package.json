@@ -1,0 +1,44 @@
+{
+	"name": "emdash-fleet-site",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"emdash": {
+		"seed": "seed/seed.json"
+	},
+	"scripts": {
+		"dev": "astro dev",
+		"build": "astro build",
+		"preview": "astro preview",
+		"typecheck": "astro check",
+		"types": "wrangler types",
+		"types:check": "wrangler types --check",
+		"check:bindings": "node scripts/check-bindings.mjs",
+		"check:workflows": "node scripts/check-workflows.mjs",
+		"check:pins": "node scripts/check-pins.mjs",
+		"check:migrations": "node scripts/check-migrations.mjs",
+		"test": "node --test \"scripts/*.test.mjs\""
+	},
+	"dependencies": {
+		"@astrojs/cloudflare": "14.4.6",
+		"@astrojs/react": "7.1.5",
+		"@emdash-cms/cloudflare": "1.4.0",
+		"astro": "7.4.9",
+		"emdash": "1.4.0",
+		"react": "19.3.1",
+		"react-dom": "19.3.1"
+	},
+	"devDependencies": {
+		"@astrojs/check": "0.9.12",
+		"@cloudflare/workers-types": "5.20261110.1",
+		"@types/node": "26.6.6",
+		"typescript": "6.0.3",
+		"wrangler": "4.160.0",
+		"yaml": "2.9.1"
+	},
+	"allowScripts": {
+		"workerd": false,
+		"esbuild": false,
+		"fsevents": false
+	}
+}

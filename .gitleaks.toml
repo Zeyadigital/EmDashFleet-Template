@@ -1,0 +1,5 @@
+# gitleaks configuration (https://github.com/gitleaks/gitleaks/tree/v8.30.1#configuration),
+# loaded from the target path by template-checks.yml, the only place gitleaks runs (HR-162).
+# The default rules only: this repository holds no secret and needs no allowlist.
+[extend]
+useDefault = true

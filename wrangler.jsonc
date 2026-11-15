@@ -1,0 +1,44 @@
+// The Worker of an EmDash site created by EmDash Fleet. Fleet's first commit to
+// a new site repository replaces the three values that start with
+// "fleet-placeholder" with the site's D1 database, R2 bucket and KV namespace.
+// Fleet uploads every build through the Workers API with the bindings its own
+// records name, so this file is read only by local development, the build and
+// the template checks. The bindings must stay exactly those of
+// fleet-site-bindings.json (npm run check:bindings). There is no worker_loaders
+// binding, so the site runs on Workers Free and sandboxed plugins stay disabled.
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "emdash-fleet-site",
+	"main": "./src/worker.ts",
+	"compatibility_date": "2026-11-10",
+	"compatibility_flags": ["nodejs_compat"],
+	"observability": {
+		"enabled": true,
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "emdash-fleet-site",
+			"database_id": "fleet-placeholder-d1-database-id",
+		},
+	],
+	"r2_buckets": [
+		{
+			"binding": "MEDIA",
+			"bucket_name": "fleet-placeholder-media",
+		},
+	],
+	"kv_namespaces": [
+		{
+			"binding": "SESSION",
+			"id": "fleet-placeholder-kv-namespace-id",
+		},
+	],
+	"images": {
+		"binding": "IMAGES",
+	},
+	// EmDash's scheduler: scheduled publishing and maintenance.
+	"triggers": {
+		"crons": ["*/5 * * * *"],
+	},
+}
