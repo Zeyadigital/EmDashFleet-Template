@@ -6,6 +6,10 @@ An [EmDash](https://github.com/emdash-cms/emdash) site for Cloudflare Workers, c
 
 The site runs on Workers Free and on Workers Paid. `wrangler.jsonc` declares no `worker_loaders` binding, so EmDash's sandboxed plugins are disabled: EmDash's Cloudflare plugin sandbox needs Workers Paid and a `worker_loaders` binding named `LOADER`, and without it sandboxed plugins do not load ([Installing plugins](https://docs.emdashcms.com/plugins/installing/), [Plugin sandbox](https://docs.emdashcms.com/deployment/plugin-sandbox/)).
 
+## Scheduled publishing
+
+`wrangler.jsonc` runs EmDash's scheduler on the Cron Trigger `*/5 * * * *`, which Fleet sends again with every deploy, and `src/worker.ts` calls `createScheduledHandler()` without `generalCron`. With `@emdash-cms/cloudflare` 1.5.0 each run publishes only the entries already due, so a scheduled entry goes live up to about 5 minutes after its time; EmDash's own starter templates run the trigger every minute ([Deploy to Cloudflare](https://docs.emdashcms.com/deployment/cloudflare/)). Keep the trigger and the handler as they are: a handler whose `generalCron` differs from the trigger ignores it, and scheduled entries are then never published.
+
 ## How EmDash Fleet builds and updates the site
 
 The two workflows in `.github/workflows/` run only when someone starts a deployment or an update in Fleet. Neither runs on a push, a pull request or a schedule, and Fleet never sets up Cloudflare builds, so pushing to this repository deploys nothing.
