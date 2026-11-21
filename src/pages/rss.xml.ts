@@ -1,10 +1,11 @@
 import type { APIRoute } from "astro";
 import { getEmDashCollection, getSiteSettings } from "emdash";
 
+import { feedCacheControl } from "../utils/feed-cache";
 import { getSiteLocale } from "../utils/locale";
 import { resolveBlogSiteIdentity } from "../utils/site-identity";
 
-export const GET: APIRoute = async ({ site, url }) => {
+export const GET: APIRoute = async ({ site, url, request }) => {
 	const siteUrl = site ?? new URL(url.origin);
 	const { siteTitle, siteTagline } = resolveBlogSiteIdentity(await getSiteSettings());
 
@@ -49,7 +50,7 @@ ${items}
 	return new Response(rss, {
 		headers: {
 			"Content-Type": "application/rss+xml; charset=utf-8",
-			"Cache-Control": "public, max-age=3600",
+			"Cache-Control": feedCacheControl(request),
 		},
 	});
 };
