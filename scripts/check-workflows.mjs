@@ -76,6 +76,25 @@ function triggers(on) {
 }
 
 /**
+ * Whether a workflow, as plain values, reaches the secrets context: a `secrets` key (`secrets: inherit`), a `${{ }}`
+ * expression that names `secrets` in any spelling (`secrets.X`, `secrets['X']`, `toJSON(secrets)`), or an `if:`
+ * condition that does without the braces. A comment is not part of the parsed workflow, so the comments that say a
+ * file "holds no secret" are not findings.
+ * @param {unknown} value
+ * @param {string} [key] the key that holds `value`
+ * @returns {boolean}
+ */
+function referencesSecrets(value, key = "") {
+	if (typeof value === "string") {
+		const inExpression = [...value.matchAll(/\$\{\{([\s\S]*?)\}\}/g)].some((expression) => /\bsecrets\b/.test(expression[1] ?? ""));
+		return inExpression || (key === "if" && /\bsecrets\b/.test(value));
+	}
+	if (Array.isArray(value)) return value.some((item) => referencesSecrets(item, key));
+	if (!isObject(value)) return false;
+	return Object.entries(value).some(([name, nested]) => name === "secrets" || referencesSecrets(nested, name));
+}
+
+/**
  * The findings of the rules every workflow follows.
  * @param {string} file
  * @param {string} text
@@ -152,11 +171,10 @@ export function lintWorkflow(file, text) {
 /**
  * The findings of the guard on fleet-build.yml or fleet-update.yml.
  * @param {keyof typeof BUILD_WORKFLOWS} name
- * @param {string} text
  * @param {unknown} workflow the file as plain values
  * @returns {Finding[]}
  */
-export function guardBuildWorkflow(name, text, workflow) {
+export function guardBuildWorkflow(name, workflow) {
 	const file = `${WORKFLOWS_DIR}/${name}`;
 	const spec = BUILD_WORKFLOWS[name];
 	/** @type {Finding[]} */
@@ -175,7 +193,7 @@ export function guardBuildWorkflow(name, text, workflow) {
 	for (const [job, body] of Object.entries(isObject(workflow.jobs) ? workflow.jobs : {})) {
 		if (isObject(body) && "permissions" in body) fail("guard-permissions", `job ${job} sets its own permissions`);
 	}
-	if (/\bsecrets\./.test(text)) fail("guard-secrets", "the workflow references secrets");
+	if (referencesSecrets(workflow)) fail("guard-secrets", "the workflow references secrets");
 
 	const dispatch = isObject(workflow.on) ? workflow.on.workflow_dispatch : null;
 	const inputs = isObject(dispatch) && isObject(dispatch.inputs) ? dispatch.inputs : {};
@@ -252,7 +270,7 @@ export function workflowFindings(files, actions = new Map()) {
 		const linted = lintWorkflow(`${WORKFLOWS_DIR}/${name}`, text);
 		findings.push(...linted.findings);
 		if (linted.workflow === null) continue;
-		if (name === "fleet-build.yml" || name === "fleet-update.yml") findings.push(...guardBuildWorkflow(name, text, linted.workflow));
+		if (name === "fleet-build.yml" || name === "fleet-update.yml") findings.push(...guardBuildWorkflow(name, linted.workflow));
 		if (name === "template-checks.yml") findings.push(...guardTemplateChecks(linted.workflow));
 	}
 	for (const [path, text] of actions) findings.push(...lintWorkflow(path, text).findings);

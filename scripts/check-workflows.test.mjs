@@ -36,6 +36,15 @@ test("fails a changed concurrency group, checkout or artifact of a build workflo
 	assert.deepEqual(rulesAfter("fleet-update.yml", (text) => text.replace("retention-days: 1", "retention-days: 7")), ["guard-artifact"]);
 });
 
+test("fails every spelling of the secrets context in a build workflow, and not a comment that names them", () => {
+	for (const spelling of ["${{ secrets.X }}", "${{ secrets['X'] }}", "${{ toJSON(secrets) }}", "${{secrets.X}}", "${{ format('{0}', secrets.X) }}"]) {
+		assert.deepEqual(rulesAfter("fleet-build.yml", (text) => text.replace("JOB_ID: ${{ inputs.job_id }}", `JOB_ID: ${spelling}`)), ["guard-secrets"], spelling);
+	}
+	assert.deepEqual(rulesAfter("fleet-update.yml", (text) => text.replace("    steps:\n", "    if: secrets.X != ''\n    steps:\n")), ["guard-secrets"]);
+	assert.deepEqual(rulesAfter("fleet-build.yml", (text) => text.replace("  build:\n", "  build:\n    secrets: inherit\n")), ["guard-secrets"]);
+	assert.deepEqual(rulesAfter("fleet-build.yml", (text) => text.replace("name: fleet-build\n", "name: fleet-build\n# Uses secrets.X nowhere; ${{ secrets.X }} would fail.\n")), []);
+});
+
 const SHA = "3d3c42e5aac5ba805825da76410c181273ba90b1";
 const workflow = (body) => `on: workflow_dispatch\njobs:\n  j:\n    runs-on: ubuntu-latest\n    steps:\n${body}`;
 const rulesOf = (text) => lintWorkflow("w.yml", text).findings.map((finding) => finding.rule);
