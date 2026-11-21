@@ -13,11 +13,18 @@ type PortableTextSpan = {
 
 type PortableTextTextBlock = PortableTextBlock & {
 	_type: "block";
-	children: PortableTextSpan[];
+	children: (PortableTextSpan | null | undefined)[];
 };
 
-function isTextBlock(block: PortableTextBlock): block is PortableTextTextBlock {
-	return block._type === "block" && Array.isArray(block.children);
+// EmDash validates a Portable Text field only as objects with a string _type,
+// so a stored block or child may be null or not an object: skip those rather
+// than throw while rendering every page that lists the post.
+function isTextBlock(block: PortableTextBlock | null | undefined): block is PortableTextTextBlock {
+	return typeof block === "object" && block !== null && block._type === "block" && Array.isArray(block.children);
+}
+
+function isTextSpan(child: PortableTextSpan | null | undefined): child is PortableTextSpan & { text: string } {
+	return typeof child === "object" && child !== null && child._type === "span" && typeof child.text === "string";
 }
 
 function countWords(text: string): number {
@@ -38,7 +45,7 @@ export function extractText(blocks: PortableTextBlock[] | undefined): string {
 		.filter(isTextBlock)
 		.map((block) =>
 			block.children
-				.filter((child) => child._type === "span" && typeof child.text === "string")
+				.filter(isTextSpan)
 				.map((span) => span.text)
 				.join(""),
 		)
