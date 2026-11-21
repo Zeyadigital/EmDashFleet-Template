@@ -5,9 +5,11 @@
 # dispatch ran on (github.sha, the head of the branch Fleet dispatched), and
 # keeps the changed files as an artifact for one day: the entry `changes`
 # holds `git status --porcelain=v1 -z --untracked-files=all` and each changed
-# file that still exists is stored as `files/<path>`. Fleet checks the list
-# and commits the files itself; this workflow writes nothing to the
-# repository, holds no secret and runs nothing on the live site. The run uses
+# file that still exists is stored as `files/<path>`. The run fails before it
+# stores anything unless the content of the update is what an update changes
+# (scripts/check-update-changes.mjs). Fleet checks the list and commits the
+# files itself; this workflow writes nothing to the repository, holds no
+# secret and runs nothing on the live site. The run uses
 # this repository owner's GitHub Actions minutes. Keep the trigger, the
 # inputs, the run-name, the concurrency group, the checkout and the artifact
 # name as they are: Fleet relies on them (npm run check:workflows). Fleet
@@ -118,8 +120,11 @@ jobs:
                 writeFileSync("package.json", JSON.stringify(pkg, null, indentOf(pkgText)) + "\n");
                 const lockText = readFileSync("package-lock.json", "utf8");
                 const lock = JSON.parse(lockText);
+                if (lock.lockfileVersion !== 3) { console.error(`::error::package-lock.json is lockfileVersion ${lock.lockfileVersion}, not 3`); process.exit(1); }
                 const emdash = /(^|\/)node_modules\/(emdash|@emdash-cms\/[^/]+|@cloudflare\/kumo)(\/|$)/;
-                for (const path of Object.keys(lock.packages ?? {})) if (emdash.test(path)) delete lock.packages[path];
+                let removed = 0;
+                for (const path of Object.keys(lock.packages ?? {})) if (emdash.test(path)) { delete lock.packages[path]; removed += 1; }
+                if (removed === 0) { console.error("::error::package-lock.json holds no EmDash package to replace"); process.exit(1); }
                 writeFileSync("package-lock.json", JSON.stringify(lock, null, indentOf(lockText)) + "\n");
               '
               npm install
@@ -153,6 +158,19 @@ jobs:
               cp -- "$path" "$out/files/$path"
             fi
           done < "$out/changes"
+
+      # npm install may change only the version of the named dependencies in
+      # package.json and the lockfile entries they bring: no other key of
+      # package.json (scripts, overrides, allowScripts, packageManager), a
+      # resolved URL only on registry.npmjs.org with an integrity, an unchanged
+      # name@version keeping its integrity, and a core update that moves emdash
+      # up, never down (scripts/check-update-changes.mjs).
+      - name: Check the changes
+        env:
+          KIND: ${{ inputs.kind }}
+          PACKAGE: ${{ inputs.package }}
+          VERSION: ${{ inputs.version }}
+        run: node scripts/check-update-changes.mjs
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

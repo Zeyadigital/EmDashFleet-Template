@@ -62,7 +62,9 @@ const BUILD_WORKFLOWS = {
 		artifact: "fleet-update-${{ inputs.job_id }}",
 		uploadPaths: ["${{ runner.temp }}/fleet-update/"],
 		// Only package.json and package-lock.json may change; any other path fails the run before it is stored.
-		runLines: ['case "$path" in package.json|package-lock.json) ;; *)'],
+		// The content of the two files is checked as well (scripts/check-update-changes.mjs), and a core update stops
+		// on a lockfile that is not version 3 or that holds no EmDash package to replace.
+		runLines: ['case "$path" in package.json|package-lock.json) ;; *)', "node scripts/check-update-changes.mjs", "if (lock.lockfileVersion !== 3)", "if (removed === 0)"],
 	},
 };
 

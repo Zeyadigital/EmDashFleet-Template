@@ -52,6 +52,12 @@ test("fails a widened upload, a missing upload option and a missing commit or pa
 	assert.deepEqual(rulesAfter("fleet-update.yml", (text) => text.replace("ref: ${{ github.sha }}", "ref: main")), ["guard-checkout"]);
 });
 
+test("fails a fleet-update.yml that does not check the content of the update or the lockfile of a core update", () => {
+	assert.deepEqual(rulesAfter("fleet-update.yml", (text) => text.replace(/ {6}- name: Check the changes\n(?: {8}.*\n)+\n/, "")), ["guard-step"]);
+	assert.deepEqual(rulesAfter("fleet-update.yml", (text) => text.replace("if (lock.lockfileVersion !== 3)", "if (false)")), ["guard-step"]);
+	assert.deepEqual(rulesAfter("fleet-update.yml", (text) => text.replace("if (removed === 0)", "if (false)")), ["guard-step"]);
+});
+
 test("fails template-checks.yml with a wider token, another branch list or a job that sets its own permissions", () => {
 	assert.deepEqual(rulesAfter("template-checks.yml", (text) => text.replace("  contents: read", "  contents: write")), ["guard-permissions"]);
 	assert.deepEqual(rulesAfter("template-checks.yml", (text) => text.replace("    runs-on: ubuntu-latest\n", "    runs-on: ubuntu-latest\n    permissions:\n      contents: write\n")), ["guard-permissions"]);
