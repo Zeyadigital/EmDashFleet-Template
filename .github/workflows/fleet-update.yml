@@ -1,18 +1,19 @@
 # Prepares an EmDash or plugin update of this site for EmDash Fleet (app plan,
 # Build and deploy, Workflow files in every site repository, and Health,
 # plugins and updates; tracker APA-171, OAU-088). It runs only when Fleet
-# dispatches it, installs the exact version Fleet names on the latest commit
-# of the branch Fleet dispatched, and keeps the changed files as an artifact
-# for one day: the entry `changes` holds `git status --porcelain=v1 -z
-# --untracked-files=all` and each changed file that still exists is stored as
-# `files/<path>`. Fleet checks the list and commits the files itself; this
-# workflow writes nothing to the repository, holds no secret and runs nothing
-# on the live site. The run uses this repository owner's GitHub Actions
-# minutes. Keep the trigger, the inputs, the run-name, the concurrency group,
-# the checkout and the artifact name as they are: Fleet relies on them (npm run
-# check:workflows). Fleet binds each update to the run it dispatched (a
-# workflow_dispatch of this file on the dispatched branch) and accepts from its
-# artifact only changes to package.json and package-lock.json.
+# dispatches it, installs the exact version Fleet names on the commit the
+# dispatch ran on (github.sha, the head of the branch Fleet dispatched), and
+# keeps the changed files as an artifact for one day: the entry `changes`
+# holds `git status --porcelain=v1 -z --untracked-files=all` and each changed
+# file that still exists is stored as `files/<path>`. Fleet checks the list
+# and commits the files itself; this workflow writes nothing to the
+# repository, holds no secret and runs nothing on the live site. The run uses
+# this repository owner's GitHub Actions minutes. Keep the trigger, the
+# inputs, the run-name, the concurrency group, the checkout and the artifact
+# name as they are: Fleet relies on them (npm run check:workflows). Fleet
+# binds each update to the run it dispatched (a workflow_dispatch of this file
+# on the dispatched branch) and accepts from its artifact only changes to
+# package.json and package-lock.json.
 # https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_dispatch
 # https://git-scm.com/docs/git-status#_porcelain_format_version_1
 name: fleet-update
@@ -67,6 +68,8 @@ jobs:
           [[ "$PACKAGE" =~ $name ]] || { echo "::error::package is not an npm package name"; exit 1; }
           [[ "$VERSION" =~ $semver ]] || { echo "::error::version is not an exact version"; exit 1; }
           [[ "$KIND" == plugin || "$PACKAGE" == emdash ]] || { echo "::error::a core update names the package emdash"; exit 1; }
+          # Fleet offers a core update only to a stable EmDash release (HR-176).
+          [[ "$KIND" == plugin || "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::a core update names a stable release"; exit 1; }
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
