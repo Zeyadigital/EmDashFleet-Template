@@ -14,6 +14,8 @@
 // node_modules/emdash/src/astro/routes/api/import/probe.ts
 // node_modules/@emdash-cms/admin/dist/index.js (handlePluginConnect)
 
+import { routedPath } from "./routed-path.ts";
+
 const PROBE_PATH = "/_emdash/api/import/probe";
 const CALLBACK_DIRECTORY = "/_emdash/api/import/wordpress-plugin/";
 const CALLBACK_PATH = `${CALLBACK_DIRECTORY}callback`;
@@ -24,17 +26,6 @@ export const AUTHORIZE_COOKIE = "fleet_wp_authorize";
 
 /** How long, in seconds, an authorization started by a probe stays open. */
 export const AUTHORIZE_SECONDS = 15 * 60;
-
-/** The path as routing reads it: decoded, lower case, single slashes and no trailing slash. */
-function routedPath(pathname: string): string {
-	let path = pathname;
-	try {
-		path = decodeURI(pathname);
-	} catch {
-		// An undecodable path is compared as it came.
-	}
-	return path.toLowerCase().replace(/\/{2,}/g, "/").replace(/\/+$/, "");
-}
 
 function hasAuthorizeCookie(request: Request): boolean {
 	const header = request.headers.get("cookie") ?? "";
