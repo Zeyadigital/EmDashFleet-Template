@@ -230,6 +230,7 @@ export function guardTemplateChecks(workflow) {
 	if (!/^[0-9a-f]{64}$/.test(String(env.GITLEAKS_SHA256 ?? ""))) fail("GITLEAKS_SHA256 must be the SHA-256 of the release archive");
 	if (!run.includes("sha256sum --check --strict")) fail("the archive must be checked against its SHA-256 before it is unpacked");
 	if (!run.includes("git rev-list --quiet") || !run.includes("--log-opts=")) fail("gitleaks must scan the commit range of the push or pull request, after git rev-list proves that the range resolves");
+	if (!run.includes('--log-opts="--text ')) fail("gitleaks must render the commit range as text (--log-opts=\"--text ...\"), so a -diff attribute or an early NUL hides nothing");
 	const checkout = steps.find((step) => isObject(step) && typeof step.uses === "string" && step.uses.startsWith("actions/checkout@"));
 	if (!isObject(checkout) || !isObject(checkout.with) || checkout.with["fetch-depth"] !== 0) fail("actions/checkout must fetch the full history (fetch-depth: 0) for the commit range");
 	return findings;
