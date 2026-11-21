@@ -132,9 +132,12 @@ jobs:
       # that git tracks (node_modules/ is ignored): any other path means an
       # install script wrote into the repository, and the run fails before
       # anything is stored. Fleet checks the list again before it commits.
+      # The output directory is made afresh, so nothing written there earlier
+      # in the job, by npm install or a package, reaches the artifact.
       - name: Collect the changed files
         run: |
           out="$RUNNER_TEMP/fleet-update"
+          rm -rf -- "$out"
           mkdir -p "$out/files"
           git status --porcelain=v1 -z --untracked-files=all > "$out/changes"
           original=false

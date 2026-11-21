@@ -99,3 +99,9 @@ test("fails template-checks.yml without a pinned, verified gitleaks scan of the 
 	assert.deepEqual(rulesAfter("template-checks.yml", (text) => text.replace(/ {10}git rev-list --quiet.*\n/, "")), ["guard-gitleaks"]);
 	assert.deepEqual(rulesAfter("template-checks.yml", (text) => text.replace("fetch-depth: 0", "fetch-depth: 2")), ["guard-gitleaks"]);
 });
+
+test("the update artifact is collected into an output directory made afresh", () => {
+	const text = files.get("fleet-update.yml") ?? "";
+	const step = text.slice(text.indexOf("- name: Collect the changed files"), text.indexOf("actions/upload-artifact@"));
+	assert.match(step, /rm -rf -- "\$out"\n\s+mkdir -p "\$out\/files"/);
+});
