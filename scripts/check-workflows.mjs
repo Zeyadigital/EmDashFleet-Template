@@ -11,11 +11,15 @@
 // through `env:`; and no trigger that runs with secrets on events outsiders
 // can cause. On top of that, fleet-build.yml and fleet-update.yml must keep
 // exactly the trigger workflow_dispatch, the run-name Fleet matches runs by,
-// `permissions: contents: read`, no `secrets` reference and their required
-// string inputs, and every job of template-checks.yml must carry the
-// repository condition of HR-119, so it never runs in a site repository, and
-// must run gitleaks (APB-001): a release archive of a pinned version, checked
-// against its SHA-256, over the commits of the push or pull request.
+// `permissions: contents: read`, no `secrets` reference, their required
+// string inputs, the checkout, the artifact (name, paths, retention, hidden
+// files) and the lines of the script that hold a run to the commit and the
+// files Fleet expects (the build's commit_sha check, the update's path
+// allowlist), and template-checks.yml must keep `permissions: contents:
+// read` and its branch lists, every job of it must carry the repository
+// condition of HR-119, so it never runs in a site repository, and it must run
+// gitleaks (APB-001): a release archive of a pinned version, checked against
+// its SHA-256, over the commits of the push or pull request.
 //
 // Usage: node scripts/check-workflows.mjs
 // https://docs.github.com/en/actions/reference/security/secure-use
@@ -30,10 +34,13 @@ const FULL_SHA = /^[0-9a-f]{40}$/;
 const FORBIDDEN_TRIGGERS = new Set(["pull_request_target", "workflow_run", "issue_comment", "repository_dispatch"]);
 const TEMPLATE_CONDITION = "github.repository == 'Zeyadigital/EmDashFleet-Template'";
 const GITLEAKS_STEP = "gitleaks";
+/** The branches whose pushes and pull requests start template-checks.yml. */
+const TEMPLATE_BRANCHES = { push: ["dev", "main"], pull_request: ["dev"] };
 
 /**
  * What Fleet relies on in each build workflow it dispatches: the required string inputs, the run-name it finds its runs
- * by, the concurrency group (a fixed name, so no run cancels another), the checkout ref and the artifact name.
+ * by, the concurrency group (a fixed name, so no run cancels another), the checkout ref, the artifact name and the
+ * paths it holds, and the lines of a `run:` script that keep a run to the commit and the files Fleet expects.
  */
 const BUILD_WORKFLOWS = {
 	"fleet-build.yml": {
@@ -42,6 +49,10 @@ const BUILD_WORKFLOWS = {
 		concurrency: "fleet-build",
 		checkoutRef: "${{ inputs.commit_sha }}",
 		artifact: "fleet-bundle-${{ inputs.job_id }}",
+		// The artifact's root is the repository: the bundle and the static output, nothing else.
+		uploadPaths: ["fleet-bundle/", "dist/client/"],
+		// The run builds the commit Fleet named, which must be the head of the dispatched branch.
+		runLines: ['[[ "$COMMIT_SHA" == "$GITHUB_SHA" ]]'],
 	},
 	"fleet-update.yml": {
 		runName: "fleet-update ${{ inputs.job_id }}",
@@ -49,6 +60,9 @@ const BUILD_WORKFLOWS = {
 		concurrency: "fleet-update",
 		checkoutRef: "${{ github.sha }}",
 		artifact: "fleet-update-${{ inputs.job_id }}",
+		uploadPaths: ["${{ runner.temp }}/fleet-update/"],
+		// Only package.json and package-lock.json may change; any other path fails the run before it is stored.
+		runLines: ['case "$path" in package.json|package-lock.json) ;; *)'],
 	},
 };
 
@@ -73,6 +87,18 @@ function triggers(on) {
 	if (typeof on === "string") return [on];
 	if (Array.isArray(on)) return on.filter((name) => typeof name === "string");
 	return isObject(on) ? Object.keys(on) : [];
+}
+
+/**
+ * The trimmed, non-empty lines of a string.
+ * @param {string} text
+ * @returns {string[]}
+ */
+function lines(text) {
+	return text
+		.split("\n")
+		.map((line) => line.trim())
+		.filter((line) => line !== "");
 }
 
 /**
@@ -214,26 +240,61 @@ export function guardBuildWorkflow(name, workflow) {
 		fail("guard-checkout", `one actions/checkout step with ref: ${spec.checkoutRef} and persist-credentials: false`);
 	}
 	const [upload, ...otherUploads] = uses("actions/upload-artifact@");
-	if (otherUploads.length > 0 || !isObject(upload) || !isObject(upload.with) || upload.with.name !== spec.artifact || upload.with["retention-days"] !== 1) {
-		fail("guard-artifact", `one actions/upload-artifact step with name: ${spec.artifact} and retention-days: 1`);
+	const uploadPaths = isObject(upload) && isObject(upload.with) && typeof upload.with.path === "string" ? lines(upload.with.path) : [];
+	if (
+		otherUploads.length > 0 ||
+		!isObject(upload) ||
+		!isObject(upload.with) ||
+		upload.with.name !== spec.artifact ||
+		upload.with["retention-days"] !== 1 ||
+		upload.with["if-no-files-found"] !== "error" ||
+		upload.with["include-hidden-files"] !== true ||
+		uploadPaths.join("\n") !== spec.uploadPaths.join("\n")
+	) {
+		fail(
+			"guard-artifact",
+			`one actions/upload-artifact step with name: ${spec.artifact}, path: ${spec.uploadPaths.join(" and ")}, retention-days: 1, if-no-files-found: error and include-hidden-files: true`,
+		);
+	}
+	const scriptLines = steps.flatMap((step) => (isObject(step) && typeof step.run === "string" ? lines(step.run).filter((line) => !line.startsWith("#")) : []));
+	for (const wanted of spec.runLines) {
+		if (!scriptLines.some((line) => line.startsWith(wanted))) fail("guard-step", `a run: script must keep the line ${wanted}`);
 	}
 	return findings;
 }
 
 /**
- * The findings of the guard on template-checks.yml: every job carries the template's repository condition, and the
- * job that checks pushes and pull requests scans their commits with gitleaks from a release archive whose SHA-256 is checked.
+ * The findings of the guard on template-checks.yml: the token stays read-only and the branch lists stay as they are,
+ * every job carries the template's repository condition, and the job that checks pushes and pull requests scans their
+ * commits with gitleaks from a release archive whose SHA-256 is checked.
  * @param {unknown} workflow
  * @returns {Finding[]}
  */
 export function guardTemplateChecks(workflow) {
 	const file = `${WORKFLOWS_DIR}/template-checks.yml`;
 	const jobs = isObject(workflow) && isObject(workflow.jobs) ? Object.entries(workflow.jobs) : [];
-	if (jobs.length === 0) return [{ file, rule: "guard", message: "the file has no jobs" }];
 	/** @type {Finding[]} */
-	const findings = jobs
-		.filter(([, body]) => !isObject(body) || body.if !== TEMPLATE_CONDITION)
-		.map(([job]) => ({ file, rule: "guard-template-only", message: `job ${job} must carry if: ${TEMPLATE_CONDITION}` }));
+	const findings = [];
+	const on = isObject(workflow) && isObject(workflow.on) ? workflow.on : {};
+	for (const [event, branches] of Object.entries(TEMPLATE_BRANCHES)) {
+		const listed = isObject(on[event]) ? on[event].branches : null;
+		if (!Array.isArray(listed) || listed.join(",") !== branches.join(",")) {
+			findings.push({ file, rule: "guard-branches", message: `${event} must run for exactly the branches ${branches.join(", ")}` });
+		}
+	}
+	const permissions = isObject(workflow) ? workflow.permissions : null;
+	if (!isObject(permissions) || Object.keys(permissions).length !== 1 || permissions.contents !== "read") {
+		findings.push({ file, rule: "guard-permissions", message: "permissions must be exactly contents: read" });
+	}
+	for (const [job, body] of jobs) {
+		if (isObject(body) && "permissions" in body) findings.push({ file, rule: "guard-permissions", message: `job ${job} sets its own permissions` });
+	}
+	if (jobs.length === 0) return [...findings, { file, rule: "guard", message: "the file has no jobs" }];
+	findings.push(
+		...jobs
+			.filter(([, body]) => !isObject(body) || body.if !== TEMPLATE_CONDITION)
+			.map(([job]) => ({ file, rule: "guard-template-only", message: `job ${job} must carry if: ${TEMPLATE_CONDITION}` })),
+	);
 	/** @type {(message: string) => void} */
 	const fail = (message) => findings.push({ file, rule: "guard-gitleaks", message });
 	const steps = jobs.flatMap(([, body]) => (isObject(body) && Array.isArray(body.steps) ? body.steps : []));

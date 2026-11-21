@@ -36,6 +36,30 @@ test("fails a changed concurrency group, checkout or artifact of a build workflo
 	assert.deepEqual(rulesAfter("fleet-update.yml", (text) => text.replace("retention-days: 1", "retention-days: 7")), ["guard-artifact"]);
 });
 
+test("fails a widened upload, a missing upload option and a missing commit or path check of a build workflow", () => {
+	const guard = ["guard-artifact"];
+	assert.deepEqual(rulesAfter("fleet-build.yml", (text) => text.replace("            dist/client/\n", "            dist/client/\n            node_modules/\n")), guard);
+	assert.deepEqual(rulesAfter("fleet-build.yml", (text) => text.replace("            fleet-bundle/\n", "            .\n")), guard);
+	assert.deepEqual(rulesAfter("fleet-build.yml", (text) => text.replace(/ {10}if-no-files-found: error\n/, "")), guard);
+	assert.deepEqual(rulesAfter("fleet-build.yml", (text) => text.replace("include-hidden-files: true", "include-hidden-files: false")), guard);
+	assert.deepEqual(rulesAfter("fleet-update.yml", (text) => text.replace("path: ${{ runner.temp }}/fleet-update/", "path: ${{ github.workspace }}")), guard);
+	assert.deepEqual(rulesAfter("fleet-update.yml", (text) => text.replace(/ {10}if-no-files-found: error\n/, "")), guard);
+	assert.deepEqual(rulesAfter("fleet-update.yml", (text) => text.replace(/ {10}include-hidden-files: true\n/, "")), guard);
+	const commitCheck = / {10}\[\[ "\$COMMIT_SHA" == "\$GITHUB_SHA" \]\].*\n/;
+	assert.deepEqual(rulesAfter("fleet-build.yml", (text) => text.replace(commitCheck, "")), ["guard-step"]);
+	assert.deepEqual(rulesAfter("fleet-build.yml", (text) => text.replace(/( {10})(\[\[ "\$COMMIT_SHA" == "\$GITHUB_SHA" \]\])/, "$1# $2")), ["guard-step"]);
+	assert.deepEqual(rulesAfter("fleet-update.yml", (text) => text.replace("package.json|package-lock.json) ;; *)", "package.json|package-lock.json|src/worker.ts) ;; *)")), ["guard-step"]);
+	assert.deepEqual(rulesAfter("fleet-update.yml", (text) => text.replace("ref: ${{ github.sha }}", "ref: main")), ["guard-checkout"]);
+});
+
+test("fails template-checks.yml with a wider token, another branch list or a job that sets its own permissions", () => {
+	assert.deepEqual(rulesAfter("template-checks.yml", (text) => text.replace("  contents: read", "  contents: write")), ["guard-permissions"]);
+	assert.deepEqual(rulesAfter("template-checks.yml", (text) => text.replace("    runs-on: ubuntu-latest\n", "    runs-on: ubuntu-latest\n    permissions:\n      contents: write\n")), ["guard-permissions"]);
+	assert.deepEqual(rulesAfter("template-checks.yml", (text) => text.replace("branches: [dev, main]", 'branches: ["**"]')), ["guard-branches"]);
+	assert.deepEqual(rulesAfter("template-checks.yml", (text) => text.replace("    branches: [dev, main]\n", "")), ["guard-branches"]);
+	assert.deepEqual(rulesAfter("template-checks.yml", (text) => text.replace("    branches: [dev]\n", '    branches: ["**"]\n')), ["guard-branches"]);
+});
+
 test("fails every spelling of the secrets context in a build workflow, and not a comment that names them", () => {
 	for (const spelling of ["${{ secrets.X }}", "${{ secrets['X'] }}", "${{ toJSON(secrets) }}", "${{secrets.X}}", "${{ format('{0}', secrets.X) }}"]) {
 		assert.deepEqual(rulesAfter("fleet-build.yml", (text) => text.replace("JOB_ID: ${{ inputs.job_id }}", `JOB_ID: ${spelling}`)), ["guard-secrets"], spelling);
