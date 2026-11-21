@@ -4,8 +4,13 @@
 # a co-founder merges them; security updates always target the default branch,
 # main. This file serves the template repository only; it stays in a site
 # repository until the owner deletes it, because Fleet never deletes a file
-# from a customer's repository (HR-119).
+# from a customer's repository (HR-119). A release is proposed 7 days after it
+# is published (cooldown, default-days: 7; Dependabot's own default is 3), so a
+# release the registry or GitHub withdraws in its first days never reaches a
+# pull request; a security update ignores the cooldown (security audit of
+# 2026-11-21, Template S19).
 # https://docs.github.com/en/code-security/reference/supply-chain-security/dependabot-options-reference
+# https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference#cooldown-
 version: 2
 updates:
   - package-ecosystem: npm
@@ -13,9 +18,13 @@ updates:
     target-branch: dev
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
 
   - package-ecosystem: github-actions
     directory: /
     target-branch: dev
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
