@@ -20,7 +20,13 @@ export default defineConfig({
 	integrations: [
 		react(),
 		emdash({
-			database: d1({ binding: "DB", session: "auto", coalesce: true }),
+			// "primary-first" starts every request's D1 session with
+			// withSession("first-primary"), so an anonymous or bearer read never
+			// begins on a read replica that may not yet hold a revoked token or a
+			// disabled user (security audit of 2026-11-21, Template record 0).
+			// Browser sessions keep their bookmark.
+			// https://developers.cloudflare.com/d1/best-practices/read-replication/
+			database: d1({ binding: "DB", session: "primary-first", coalesce: true }),
 			storage: r2({ binding: "MEDIA" }),
 			// No blurhash or dominant colour is derived from uploaded images
 			// (security audit of 2026-11-21, Template v14): EmDash 1.5.0 bounds the
