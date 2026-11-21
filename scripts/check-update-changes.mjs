@@ -26,9 +26,9 @@
 // https://docs.npmjs.com/cli/v11/configuring-npm/package-json
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { sourceProblems } from "./lib/lockfile.mjs";
 import { report } from "./lib/report.mjs";
 
-const REGISTRY = "https://registry.npmjs.org/";
 const VERSION_GROUPS = ["dependencies", "devDependencies", "optionalDependencies"];
 const CORE_PACKAGES = ["emdash", "@emdash-cms/cloudflare"];
 
@@ -165,11 +165,7 @@ function lockFindings(names, version, before, after) {
 			}
 		}
 		if (canonical(before.packages[path]) === canonical(entry)) continue;
-		if (entry.link === true) findings.push({ file, rule: "registry", message: `${path} is a link` });
-		else if (entry.inBundle !== true) {
-			if (typeof entry.resolved !== "string" || !entry.resolved.startsWith(REGISTRY)) findings.push({ file, rule: "registry", message: `${path} must resolve from ${REGISTRY}` });
-			if (typeof entry.integrity !== "string" || !/^sha(256|384|512)-/.test(entry.integrity)) findings.push({ file, rule: "registry", message: `${path} must carry an sha integrity` });
-		}
+		for (const problem of sourceProblems(entry, { allowBundled: true })) findings.push({ file, rule: "registry", message: `${path} ${problem}` });
 	}
 	for (const name of names) {
 		const installed = after.packages[`node_modules/${name}`];
