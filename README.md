@@ -2,6 +2,10 @@
 
 An [EmDash](https://github.com/emdash-cms/emdash) site for Cloudflare Workers, created from the EmDash Fleet site template. [EmDash Fleet](https://emdashfleet.com) builds this repository, deploys it to the Cloudflare account it was connected with and installs EmDash and plugin updates when someone asks for them in Fleet. It is an ordinary Astro and EmDash project: the site keeps running without Fleet, and you can build and deploy it yourself.
 
+## Finish the setup right after the first deploy
+
+A newly deployed site has no user until someone completes the EmDash setup wizard at `/_emdash/admin`, and EmDash makes whoever completes it first the site's administrator; it asks for no proof that this person owns the site. Open "Finish the EmDash setup" in Fleet as soon as the first deploy ends. If the wizard says the setup is already complete and you did not complete it, delete the site in Fleet and create it again.
+
 ## Workers Free and sandboxed plugins
 
 The site runs on Workers Free and on Workers Paid. `wrangler.jsonc` declares no `worker_loaders` binding, so EmDash's sandboxed plugins are disabled: EmDash's Cloudflare plugin sandbox needs Workers Paid and a `worker_loaders` binding named `LOADER`, and without it sandboxed plugins do not load ([Installing plugins](https://docs.emdashcms.com/plugins/installing/), [Plugin sandbox](https://docs.emdashcms.com/deployment/plugin-sandbox/)).
