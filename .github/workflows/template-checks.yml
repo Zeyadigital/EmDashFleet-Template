@@ -68,8 +68,11 @@ jobs:
           # --text renders every commit of the range as text, so a -diff or
           # binary attribute, or a NUL early in a file, does not hide a token
           # from gitleaks behind "Binary files ... differ" (security audit of
-          # 2026-11-21, Watch h11).
-          "$RUNNER_TEMP/gitleaks" git --redact --no-banner --verbose --log-opts="--text ${BASE_SHA}..${HEAD_SHA}" .
+          # 2026-11-21, Watch h11). -m shows each merge commit's diff against
+          # every parent: git log -p prints no diff for a merge by default, so
+          # a token added while resolving a merge would pass unscanned (same
+          # audit, Watch v04).
+          "$RUNNER_TEMP/gitleaks" git --redact --no-banner --verbose --log-opts="--text -m ${BASE_SHA}..${HEAD_SHA}" .
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
