@@ -5,7 +5,11 @@
 // pinned exactly). The same rules as scripts/check-pins.ts of
 // Zeyadigital/EmDashFleet-App, which this repository cannot reach. Actions are
 // pinned by commit SHA, which scripts/check-workflows.mjs checks. A `file:`
-// link to a folder of this repository has no version to pin.
+// link to a folder of this repository has no version to pin; a link that
+// climbs out of it with `..` fails. Every `overrides` entry is one exact
+// version or a `$name` reference to a direct dependency, and .npmrc holds
+// save-exact=true and nothing else, so no registry, git or URL source can be
+// added without failing (security audit of 2026-11-21, Template h03, h04, h20).
 //
 // Usage: node scripts/check-pins.mjs
 import { spawnSync } from "node:child_process";
@@ -13,7 +17,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { report } from "./lib/report.mjs";
 
 const EXACT = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
-const LOCAL_LINK = /^file:(?![./])/;
+const LOCAL_LINK = /^file:(?![./])(?!(?:.*\/)?\.\.(?:\/|$))/;
+const OVERRIDE_REFERENCE = /^\$[^\s$]+$/;
 const DEPENDENCY_FIELDS = ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"];
 
 /** @typedef {import("./lib/report.mjs").Finding} Finding */
@@ -38,7 +43,21 @@ export function checkManifest(file, text) {
 			findings.push({ file, rule: "exact-version", message: `${field}.${name} is ${JSON.stringify(version)}, not one exact version` });
 		}
 	}
+	if (isRecord(manifest) && manifest.overrides !== undefined) findings.push(...checkOverrides(file, "overrides", manifest.overrides));
 	return findings;
+}
+
+/**
+ * The findings of an `overrides` value: each string is one exact version or a `$name` reference, each object nests further overrides.
+ * @param {string} file
+ * @param {string} path
+ * @param {unknown} value
+ * @returns {Finding[]}
+ */
+function checkOverrides(file, path, value) {
+	if (typeof value === "string" && (EXACT.test(value) || OVERRIDE_REFERENCE.test(value))) return [];
+	if (isRecord(value)) return Object.entries(value).flatMap(([name, nested]) => checkOverrides(file, `${path}.${name}`, nested));
+	return [{ file, rule: "exact-version", message: `${path} is ${JSON.stringify(value)}, not one exact version` }];
 }
 
 /**
@@ -58,6 +77,11 @@ export function checkRuntime({ nvmrc, rootManifest, npmrc }) {
 	}
 	if (engines.node !== undefined && engines.node !== node) findings.push({ file: "package.json", rule: "engines", message: `engines.node must be ${node}, the version of .nvmrc` });
 	if (!/^save-exact\s*=\s*true\s*$/m.test(npmrc)) findings.push({ file: ".npmrc", rule: "save-exact", message: "save-exact=true is missing" });
+	for (const line of npmrc.split(/\r?\n/)) {
+		const setting = line.trim();
+		if (setting === "" || setting.startsWith("#") || setting.startsWith(";") || /^save-exact\s*=\s*true$/.test(setting)) continue;
+		findings.push({ file: ".npmrc", rule: "npmrc", message: `${JSON.stringify(setting.split("=")[0]?.trim())} is not allowed: .npmrc holds save-exact=true only` });
+	}
 	return findings;
 }
 
