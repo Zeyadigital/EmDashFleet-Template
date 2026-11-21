@@ -22,6 +22,13 @@ export default defineConfig({
 		emdash({
 			database: d1({ binding: "DB", session: "auto", coalesce: true }),
 			storage: r2({ binding: "MEDIA" }),
+			// No blurhash or dominant colour is derived from uploaded images
+			// (security audit of 2026-11-21, Template v14): EmDash 1.5.0 bounds the
+			// decode by the first PNG header only, so a small upload that inflates
+			// to hundreds of megabytes passes and can exhaust the Worker's 128 MB.
+			// Dimensions, validation and content hashing stay on.
+			// node_modules/emdash/src/media/enrich.ts, src/media/placeholder.ts
+			imagePlaceholders: false,
 		}),
 	],
 	fonts: [
